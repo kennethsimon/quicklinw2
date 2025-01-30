@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1069775477646",
+    "project_id": "quickline-5346c",
+    "storage_bucket": "quickline-5346c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1069775477646:android:a3df9b7372b80108c0a2df",
+        "android_client_info": {
+          "package_name": "com.onequicklinegroup"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChG6X14S1fTPLF7PtA_b6-aDILsu9yO_s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
