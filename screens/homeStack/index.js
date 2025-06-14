@@ -12,6 +12,7 @@ import Clienttype from '../../components/chooseclienttype';
 import Calenderscreen from '../../components/appointment';
 import Timeslots from '../../components/timeslots';
 import HomeComponent from '../../components/Homecomponent/HomeComponent';
+import AmbulanceScreen from '../../components/ambulance';
 
 
 const Stack = createNativeStackNavigator();
@@ -160,9 +161,9 @@ function HomeStack() {
           // ),
         })}
       />
-      {/* <Stack.Screen
-        name="Changepassword"
-        component={Changepassword}
+      <Stack.Screen
+        name="Ambulance"
+        component={AmbulanceScreen}
         options={({navigation}) => ({
           title: null,
           // headerLeft: () => <Materialicon name="x" size={30} color="black" />,
@@ -170,7 +171,7 @@ function HomeStack() {
           //   <Materialicon name="help-circle" size={30} color="black" />
           // ),
         })}
-      /> */}
+      />
       {/* <Stack.Screen
         name="Newpassword"
         component={Newpassword}

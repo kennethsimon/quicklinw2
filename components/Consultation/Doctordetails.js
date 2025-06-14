@@ -14,11 +14,13 @@ import { Actionsheet, useDisclose, Button, Box } from 'native-base';
 import moment from 'moment';
 import axios from 'axios'; // Import axios for HTTP requests
 import {Context as AuthContext} from '../../context/AppContext';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
 const DoctorDetails = ({ navigation, route }) => {
   const { state } = useContext(AuthContext);
+    const {t} = useTranslation();
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTime, setSelectedTime] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('Afternoon');
@@ -119,7 +121,7 @@ const DoctorDetails = ({ navigation, route }) => {
       client_name: state?.user?.user?.full_name,
       client_phone: state?.user?.user?.telephone_number,
       officephonenumber: '255755696140',
-      language: state?.language,
+      language: state?.language || 'english',
     };
   
     try {
@@ -172,12 +174,12 @@ const DoctorDetails = ({ navigation, route }) => {
               Dr {doctor.full_name}
             </Text>
             <Text style={styles.rating}>
-              {doctor.rating} ⭐ ({doctor.reviews} reviews)
+              {doctor.rating} ⭐ ({doctor.reviews} {t("reviews")})
             </Text>
             <View style={styles.tagsContainer}>
               {doctor?.categories?.map((tag, index) => (
                 <Text key={index} style={styles.tag}>
-                  {tag?.name}
+                  {state.language === 'english' ? tag?.name : tag?.nameswahili}
                 </Text>
               ))}
             </View>
@@ -185,17 +187,17 @@ const DoctorDetails = ({ navigation, route }) => {
         </View>
 
         {/* Doctor Biography */}
-        <Text style={styles.sectionTitle}>Doctor Biography</Text>
+        <Text style={styles.sectionTitle}>{t("Doctor Biography")}</Text>
         <Text style={styles.biography}>{doctor.description}</Text>
 
         {/* Select Date */}
-        <Text style={styles.sectionTitle}>Select Date</Text>
+        <Text style={styles.sectionTitle}>{t("Select Date")}</Text>
         <TouchableOpacity
           style={styles.dateButton}
           onPress={() => setShowDatePicker(true)}
         >
           <Text style={styles.dateButtonText}>
-            {selectedDate ? selectedDate : 'Select Date'}
+            {selectedDate ? selectedDate : state.language === 'english' ? 'Select Date' : "Chagua Tarehe"}
           </Text>
         </TouchableOpacity>
         {showDatePicker && (
@@ -208,7 +210,7 @@ const DoctorDetails = ({ navigation, route }) => {
         )}
 
         {/* Time Period Selector */}
-        <Text style={styles.sectionTitle}>Choose Times</Text>
+        <Text style={styles.sectionTitle}>{t("Choose Times")}</Text>
         <View style={styles.timePeriods}>
           {Object.keys(categorizedSchedules).map((period) => (
             <TouchableOpacity
@@ -219,7 +221,7 @@ const DoctorDetails = ({ navigation, route }) => {
               ]}
               onPress={() => setSelectedPeriod(period)}
             >
-              <Text style={styles.periodText}>{period}</Text>
+              <Text style={styles.periodText}>{t(`${period}`)}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -246,14 +248,14 @@ const DoctorDetails = ({ navigation, route }) => {
 
         {/* Book Appointment Button */}
         <TouchableOpacity style={styles.bookButton} onPress={handleBookAppointment}>
-          <Text style={styles.bookButtonText}>Book Appointment</Text>
+          <Text style={styles.bookButtonText}>{t("Book Appointment")}</Text>
         </TouchableOpacity>
 
         {/* Native Base Action Sheet */}
         <Actionsheet isOpen={isOpen} onClose={onClose}>
           <Actionsheet.Content>
             <Box w="100%" px={4} justifyContent="center">
-              <Text style={styles.actionSheetTitle}>Choose Appointment Type</Text>
+              <Text style={styles.actionSheetTitle}>{t("Choose Appointment Type")}</Text>
             </Box>
             <Actionsheet.Item onPress={() => handleActionSheetOption('video')}>
               Video - TZS {formatCurrency(doctor?.video_call_price.toFixed(2))}
@@ -261,8 +263,11 @@ const DoctorDetails = ({ navigation, route }) => {
             <Actionsheet.Item onPress={() => handleActionSheetOption('chat')}>
               Chat - TZS {formatCurrency(doctor?.audio_call_price.toFixed(2))}
             </Actionsheet.Item>
+            <Actionsheet.Item onPress={() => {navigation.navigate('MapScreen')}}>
+             {t("Nearby Hospital")}
+            </Actionsheet.Item>
             <Actionsheet.Item onPress={onClose} _text={{ color: 'red.500' }}>
-              Cancel
+              {t("Cancel")}
             </Actionsheet.Item>
           </Actionsheet.Content>
         </Actionsheet>

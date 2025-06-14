@@ -74,7 +74,7 @@ const DoctorsList = ({ navigation, route }) => {
       style={styles.item}
       onPress={() => navigation.navigate('Doctorsdetails', { doctor: item, department })}
     >
-      <Image source={{ uri: 'https://placehold.jp/3d4070/ffffff/150x150.png?text=s' }} style={styles.avatar} />
+      <Image source={{ uri: item?.profile_image }} style={styles.avatar} />
       <View style={styles.info}>
         <Text style={styles.title}>{item.full_name}</Text>
         <Text numberOfLines={1} style={styles.description}>{item.description}</Text>
@@ -92,6 +92,7 @@ const DoctorsList = ({ navigation, route }) => {
     );
   }
 
+  console.log(doctors);
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <FlatList

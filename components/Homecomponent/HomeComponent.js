@@ -64,7 +64,11 @@ const HomeComponent = () => {
         <Box onPress={() => setIsOpen(!isOpen)} iconName="help-circle-outline" text="Support" />
       </View>
       <View style={styles.row}>
-        <Box onPress={onActionSheetOpen} iconName="translate" text="Language" />
+  <Box onPress={() => navigation.navigate('Ambulance')} iconName="ambulance" text="Ambulance" />
+  <Box onPress={onActionSheetOpen} iconName="translate" text="Language" />
+</View>
+      <View style={styles.row}>
+        {/* <Box onPress={onActionSheetOpen} iconName="translate" text="Language" /> */}
         <Box onPress={() => {logout()}} iconName="power" text="Log Out" />
       </View>
      </ScrollView>

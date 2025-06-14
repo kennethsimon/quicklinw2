@@ -11,7 +11,8 @@ import {
 import { Context as AuthContext } from '../../context/AppContext';
 import { ScrollView } from 'native-base';
 import io from 'socket.io-client';
-import { useFocusEffect } from '@react-navigation/native'; // Import useFocusEffect
+import { useFocusEffect } from '@react-navigation/native';
+import Icon from 'react-native-vector-icons/FontAwesome'; // Import the icon library
 
 const ChatList = ({ navigation }) => {
   const [chats, setChats] = useState([]);
@@ -19,8 +20,6 @@ const ChatList = ({ navigation }) => {
   const [error, setError] = useState(null);
   const { state } = useContext(AuthContext);
   const [socket, setSocket] = useState(null);
-
-  console.log(chats[0]?.appointmentId);
 
   // Initialize WebSocket connection
   useEffect(() => {
@@ -86,40 +85,50 @@ const ChatList = ({ navigation }) => {
   );
 
   // Render each chat item
-  const renderItem = ({ item }) => (
-    <TouchableOpacity
-      style={styles.chatItem}
-      onPress={() =>
-        navigation.navigate('Chatscreen', {
-          chat: item,
-          doctorId: item?.participants?.find(
-            (app) => app?.participantModel === 'Doctors'
-          )?._id,
-        })
-      }
-    >
-      <Image
-        source={{
-          uri:
-            item.participants.find((p) => p.participantModel === 'Doctors')
-              ?.participantId?.avatar ||
-            'https://placehold.jp/3d4070/ffffff/150x150.png?text=D',
+  const renderItem = ({ item }) => {
+    const isPaid = item?.appointmentId?.paymentstatus !== 'not_paid';
+
+    return (
+      <TouchableOpacity
+        style={styles.chatItem}
+        onPress={() => {
+          if (isPaid) {
+            navigation.navigate('Chatscreen', {
+              chat: item,
+              doctorId: item?.participants?.find(
+                (app) => app?.participantModel === 'Doctors'
+              )?._id,
+            });
+          }
         }}
-        style={styles.avatar}
-      />
-      <View style={styles.chatDetails}>
-        <Text style={styles.name}>
-          {item.participants.find((p) => p.participantModel === 'Doctors')
-            ?.participantId?.full_name || 'Doctor'}
-        </Text>
-        <Text style={styles.recentMessage}>
-          {item.messages.length > 0
-            ? item.messages[item.messages.length - 1].message
-            : 'No messages yet'}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+        disabled={!isPaid}
+      >
+        <Image
+          source={{
+            uri:
+              item.participants.find((p) => p.participantModel === 'Doctors')
+                ?.participantId?.profile_image ||
+              'https://placehold.jp/3d4070/ffffff/150x150.png?text=D',
+          }}
+          style={styles.avatar}
+        />
+        <View style={styles.chatDetails}>
+          <Text style={styles.name}>
+            {item.participants.find((p) => p.participantModel === 'Doctors')
+              ?.participantId?.full_name || 'Doctor'}
+          </Text>
+          <Text style={styles.recentMessage}>
+            {item.messages.length > 0
+              ? item.messages[item.messages.length - 1].message
+              : 'No messages yet'}
+          </Text>
+        </View>
+        {!isPaid && (
+          <Icon name="lock" size={24} color="#666" style={styles.lockIcon} />
+        )}
+      </TouchableOpacity>
+    );
+  };
 
   // Show loading indicator while fetching data
   if (loading) {
@@ -197,6 +206,9 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: 'red',
+  },
+  lockIcon: {
+    marginLeft: 10,
   },
 });
 

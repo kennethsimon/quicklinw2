@@ -8,11 +8,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import  Ionicons from 'react-native-vector-icons/Ionicons'; // For the call icon
+import Ionicons from 'react-native-vector-icons/Ionicons'; // For the call and lock icons
 import { Context as AuthContext } from '../../context/AppContext'; // Import AuthContext
 import io from 'socket.io-client'; // Import socket.io-client
 import { useFocusEffect, useNavigation } from '@react-navigation/native'; // Import useFocusEffect
-import moment from 'moment'
+import moment from 'moment';
 
 const VideoCallList = () => {
   const [videoCalls, setVideoCalls] = useState([]); // State for video appointments
@@ -58,13 +58,12 @@ const VideoCallList = () => {
 
         // Listen for the response containing the user's appointments
         socket.on('userChats', (chats) => {
-
           // Filter appointments to show only video appointments
           const filteredVideoCalls = chats.filter(
             (chat) => chat?.appointmentId?.appointmentType === 'video'
           );
 
-          setVideoCalls(filteredVideoCalls); 
+          setVideoCalls(filteredVideoCalls);
           setLoading(false); // Set loading to false
         });
 
@@ -87,43 +86,57 @@ const VideoCallList = () => {
   );
 
   // Render each video call item
-  const renderItem = ({ item }) => (
-    <View style={styles.videoCallItem}>
-      {/* Avatar */}
-      <Image
-        source={{
-          uri: 'https://placehold.jp/3d4070/ffffff/150x150.png?text=D',
-        }}
-        style={styles.avatar}
-      />
-      {/* Doctor Name and Date */}
-      <View style={styles.detailsContainer}>
-        <Text style={styles.doctorName}>
-          {item?.participants?.find((p) => p?.participantModel === 'Doctors')
-            ?.participantId?.full_name || 'Doctor'}
-        </Text>
-        <Text style={styles.date}>
-          {moment(item?.appointmentId?.start_time).format('YYYY-MM-DD')}
-        </Text>
+  const renderItem = ({ item }) => {
+    const isPaid = item?.appointmentId?.paymentstatus !== 'not_paid';
+
+    return (
+      <View style={styles.videoCallItem}>
+        {/* Avatar */}
+        <Image
+          source={{
+            uri: 'https://placehold.jp/3d4070/ffffff/150x150.png?text=D',
+          }}
+          style={styles.avatar}
+        />
+        {/* Doctor Name and Date */}
+        <View style={styles.detailsContainer}>
+          <Text style={styles.doctorName}>
+            {item?.participants?.find((p) => p?.participantModel === 'Doctors')
+              ?.participantId?.full_name || 'Doctor'}
+          </Text>
+          <Text style={styles.date}>
+            {moment(item?.appointmentId?.start_time).format('YYYY-MM-DD')}
+          </Text>
+        </View>
+        {/* Call Icon or Lock Icon */}
+        <TouchableOpacity
+          style={[
+            styles.callIconContainer,
+            !isPaid && { backgroundColor: '#ccc' }, // Gray out if not paid
+          ]}
+          onPress={() => {
+            if (isPaid) {
+              // Navigate to the video call screen with Agora details
+              navigation.navigate('ConsultationStack', {
+                screen: 'VideoCallScreen', // Specify the screen within the stack
+                params: {
+                  channelName: item?.appointmentId?.agoraChannelName || '', // Fallback to empty string if missing
+                  token: item?.appointmentId?.clientToken || '', // Fallback to empty string if missing
+                },
+              });
+            }
+          }}
+          disabled={!isPaid} // Disable if not paid
+        >
+          {isPaid ? (
+            <Ionicons name="call" size={20} color="#FFFFFF" />
+          ) : (
+            <Ionicons name="lock-closed" size={20} color="#FFFFFF" />
+          )}
+        </TouchableOpacity>
       </View>
-      {/* Call Icon */}
-      <TouchableOpacity
-        style={styles.callIconContainer}
-        onPress={() => {
-          // Navigate to the video call screen with Agora details
-          navigation.navigate('ConsultationStack', {
-            screen: 'VideoCallScreen', // Specify the screen within the stack
-            params: {
-              channelName: item?.appointmentId?.agoraChannelName || '', // Fallback to empty string if missing
-              token: item?.appointmentId?.clientToken || '', // Fallback to empty string if missing
-            },
-          });
-        }}
-      >
-        <Ionicons name="call" size={20} color="#FFFFFF" />
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   // Show loading indicator while fetching data
   if (loading) {

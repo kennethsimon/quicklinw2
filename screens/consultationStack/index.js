@@ -5,6 +5,7 @@ import DoctorsList from '../../components/Consultation/doctors';
 import DoctorDetails from '../../components/Consultation/Doctordetails';
 import AppointmentReceiptScreen from '../../components/Consultation/Receipt';
 import VideoCallScreen from '../../components/Consultation/VideoScreen';
+import HospitalMapScreen from '../../components/Consultation/Mapscreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -13,21 +14,23 @@ function ConsultationStack() {
     <Stack.Navigator
       initialRouteName="Cats"
       screenOptions={{
-        headerShadowVisible: false,
+        headerShadowVisible: true,
         animation: 'none'
       }}>
 <Stack.Screen
         name="Cats"
         component={CategoriesList}
         options={({navigation}) => ({
-          title: null,
+          title: 'Categories',
+          headerTitleAlign: 'center'
         })}
       />
       <Stack.Screen
         name="Doctorslist"
         component={DoctorsList}
         options={({navigation}) => ({
-          title: null,
+          title: 'Doctors',
+          headerTitleAlign: 'center'
         })}
       />
         <Stack.Screen
@@ -47,6 +50,13 @@ function ConsultationStack() {
       <Stack.Screen
         name="VideoCallScreen"
         component={VideoCallScreen}
+        options={({navigation}) => ({
+          title: null,
+        })}
+      />
+       <Stack.Screen
+        name="MapScreen"
+        component={HospitalMapScreen}
         options={({navigation}) => ({
           title: null,
         })}
