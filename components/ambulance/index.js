@@ -1,5 +1,3 @@
-// AmbulanceScreen.js
-
 import React, { useContext, useRef, useState, useEffect } from 'react';
 import {
   StyleSheet,
@@ -12,6 +10,7 @@ import {
   ScrollView,
   Alert,
   PermissionsAndroid,
+  Linking,
 } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import { Context as AuthContext } from '../../context/AppContext';
@@ -25,24 +24,41 @@ import io from 'socket.io-client';
 import { useTranslation } from 'react-i18next';
 
 const { width, height } = Dimensions.get('window');
-const socket = io('https://api.quickline.tech');
 
 const AmbulanceScreen = () => {
   const { state } = useContext(AuthContext);
   const mapRef = useRef(null);
   const fromRef = useRef();
   const toRef = useRef();
+  const socketRef = useRef(null);
   const { t } = useTranslation();
+
   const [fromLocation, setFromLocation] = useState(null);
   const [toLocation, setToLocation] = useState(null);
   const [fromText, setFromText] = useState('');
   const [confirmed, setConfirmed] = useState(false);
   const [nearbyRiders, setNearbyRiders] = useState([]);
   const [selectedRider, setSelectedRider] = useState(null);
-  const [requestSent, setRequestSent] = useState(false);
   const [routeCoords, setRouteCoords] = useState([]);
   const [tripStatus, setTripStatus] = useState('');
   const [tripId, setTripId] = useState('');
+
+  console.log(tripId, 'Trip ID');
+
+  useEffect(() => {
+    const socket = io('https://api.quickline.tech', {
+      transports: ['websocket'],
+      auth: { token: state?.user?.auth_token },
+    });
+
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log('✅ Connected to socket:', socket.id);
+    });
+
+    return () => socket.disconnect();
+  }, []);
 
   useEffect(() => {
     const requestLocationPermission = async () => {
@@ -93,49 +109,87 @@ const AmbulanceScreen = () => {
       });
       const riders = res.data.data;
       setNearbyRiders(riders);
-      if (riders.length) autoSelectRider(riders[0]);
+      if (riders.length) setSelectedRider(riders[0]);
       else Alert.alert('No Riders', 'No nearby ambulance drivers found.');
     } catch {
       Alert.alert('Error', 'Could not load riders');
     }
   };
 
-  const autoSelectRider = (rider) => setSelectedRider(rider);
+  const sendRideRequestREST = async () => {
+    try {
+      const res = await axios.post(
+        'https://api.quickline.tech/trips/request',
+        {
+          pickup: fromText || 'Custom pickup',
+          dropoff: 'Custom dropoff',
+          coordinates: {
+            origin: [fromLocation.longitude, fromLocation.latitude],
+            destination: [toLocation.longitude, toLocation.latitude],
+          },
+          rider: selectedRider?._id,
+        },
+        {
+          headers: { 'auth-token': state?.user?.auth_token },
+        }
+      );
 
-  const onConfirm = () => {
-    if (fromLocation && toLocation) {
-      setConfirmed(true);
-      fetchNearbyRiders();
+      const { trip } = res.data;
+      setTripId(trip._id);
+      Alert.alert('🚑 Trip requested successfully');
+      fetchRoute();
+    } catch (err) {
+      console.error(err);
+      Alert.alert('❌ Request Failed', 'Trip request could not be processed.');
     }
   };
 
-  const distanceInMeters = selectedRider && fromLocation
-    ? getDistance(
-        { latitude: fromLocation.latitude, longitude: fromLocation.longitude },
-        {
-          latitude: selectedRider.location.coordinates[1],
-          longitude: selectedRider.location.coordinates[0],
-        }
-      )
-    : null;
+  const onConfirm = async () => {
+    if (fromLocation && toLocation) {
+      setConfirmed(true);
+      await fetchNearbyRiders();
+    }
+  };
 
-  const estimateArrivalTime = (distance) => Math.ceil((distance / 11.11) / 60);
+  useEffect(() => {
+    if (confirmed && selectedRider && fromLocation && toLocation) {
+      sendRideRequestREST();
+    }
+  }, [confirmed, selectedRider]);
 
-  const sendRideRequestViaSocket = () => {
-    const payload = {
-      pickup: fromText || 'Custom pickup',
-      dropoff: 'Custom dropoff',
-      coordinates: {
-        origin: [fromLocation.longitude, fromLocation.latitude],
-        destination: [toLocation.longitude, toLocation.latitude],
-      },
-      rider: selectedRider._id,
-      auth_token: state?.user?.auth_token,
+  useEffect(() => {
+    if (!tripId || !socketRef.current) return;
+
+    socketRef.current.emit('joinTrip', tripId);
+
+    const socket = socketRef.current;
+
+    const handleTripStatusUpdate = ({ status }) => {
+      console.log('🛰️ Trip status update:', status);
+      setTripStatus(status);
+      if (status === 'en_route' || status === 'arrived') fetchRoute();
+      if (status === 'completed') Alert.alert('Trip Completed');
     };
 
-    socket.emit('tripRequest', payload);
-    setRequestSent(true);
-  };
+    const handleLocationUpdate = ({ userModel, coords }) => {
+      if (userModel === 'AmbulanceRider') {
+        mapRef.current?.animateToRegion({
+          latitude: coords.latitude,
+          longitude: coords.longitude,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        });
+      }
+    };
+
+    socket.on('tripStatusUpdate', handleTripStatusUpdate);
+    socket.on('locationUpdate', handleLocationUpdate);
+
+    return () => {
+      socket.off('tripStatusUpdate', handleTripStatusUpdate);
+      socket.off('locationUpdate', handleLocationUpdate);
+    };
+  }, [tripId]);
 
   const fetchRoute = async () => {
     try {
@@ -167,55 +221,17 @@ const AmbulanceScreen = () => {
     return points;
   };
 
-  useEffect(() => {
-    if (selectedRider && confirmed && !requestSent) sendRideRequestViaSocket();
-  }, [selectedRider, confirmed]);
+  const distanceInMeters = selectedRider && fromLocation
+    ? getDistance(
+        { latitude: fromLocation.latitude, longitude: fromLocation.longitude },
+        {
+          latitude: selectedRider.location.coordinates[1],
+          longitude: selectedRider.location.coordinates[0],
+        }
+      )
+    : null;
 
-  useEffect(() => {
-    socket.on('tripCreated', (data) => {
-      if (data?.trip?._id) {
-        setTripId(data.trip._id);
-        Alert.alert('Ride Requested');
-        fetchRoute();
-      } else {
-        Alert.alert('Error', 'Trip creation failed.');
-      }
-    });
-
-    return () => socket.off('tripCreated');
-  }, []);
-
-  useEffect(() => {
-    if (!tripId) return;
-
-    socket.emit('joinTrip', tripId);
-
-    const handleTripStatusUpdate = ({ status }) => {
-      console.log('trip status --->', status);
-      setTripStatus(status);
-      if (status === 'en_route' || status === 'arrived') fetchRoute();
-      if (status === 'completed') Alert.alert('Trip Completed');
-    };
-
-    const handleLocationUpdate = ({ userModel, coords }) => {
-      if (userModel === 'AmbulanceRider') {
-        mapRef.current?.animateToRegion({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
-      }
-    };
-
-    socket.on('tripStatusUpdate', handleTripStatusUpdate);
-    socket.on('locationUpdate', handleLocationUpdate);
-
-    return () => {
-      socket.off('tripStatusUpdate', handleTripStatusUpdate);
-      socket.off('locationUpdate', handleLocationUpdate);
-    };
-  }, [tripId]);
+  const estimateArrivalTime = (distance) => Math.ceil((distance / 11.11) / 60);
 
   return (
     <View style={styles.container}>
@@ -254,7 +270,7 @@ const AmbulanceScreen = () => {
             onPress={(data, details = null) => {
               const loc = details.geometry.location;
               setFromLocation({ latitude: loc.lat, longitude: loc.lng });
-              setConfirmed(false); setRequestSent(false); setRouteCoords([]);
+              setConfirmed(false); setRouteCoords([]);
               setFromText(data.description);
             }}
             fetchDetails
@@ -268,7 +284,7 @@ const AmbulanceScreen = () => {
             onPress={(data, details = null) => {
               const loc = details.geometry.location;
               setToLocation({ latitude: loc.lat, longitude: loc.lng });
-              setConfirmed(false); setRequestSent(false); setRouteCoords([]);
+              setConfirmed(false); setRouteCoords([]);
             }}
             fetchDetails
             query={{ key: 'AIzaSyD4eggCjR87W_jzEavBrCIBAe-BAL1z_Rc', language: 'en' }}
@@ -279,13 +295,13 @@ const AmbulanceScreen = () => {
 
       {!confirmed && fromLocation && toLocation && (
         <TouchableOpacity style={styles.confirmButton} onPress={onConfirm}>
-          <Text style={styles.confirmText}>Confirm & Find Nearby Riders</Text>
+          <Text style={styles.confirmText}>{t("Confirm & Find Nearby Riders")}</Text>
         </TouchableOpacity>
       )}
 
       {confirmed && (
         <Box position="absolute" bottom={130} left={10} right={10} bg="white" p={4} borderRadius="md" shadow={2}>
-          <Text style={{ color: 'black' }}>Status: {tripStatus || 'Waiting for rider'}</Text>
+          <Text style={{ color: 'black' }}>{t("Status")}: {t('tripStatus') || t('Waiting for rider')}</Text>
         </Box>
       )}
 
@@ -301,10 +317,10 @@ const AmbulanceScreen = () => {
               </Text>
               <Text style={{ color: 'gray' }}>ETA: {estimateArrivalTime(distanceInMeters)} min</Text>
               <Text style={{ color: 'gray' }}>
-                Distance: {(distanceInMeters / 1000).toFixed(2)} km
+                {t("Distance")}: {(distanceInMeters / 1000).toFixed(2)} km
               </Text>
             </VStack>
-            <Button size="sm" onPress={() => Alert.alert('Calling driver...')}>Call</Button>
+            <Button size="sm" onPress={() => Linking.openURL(`tel:${trip?.rider?.telephone_number}`)}>{t("Call")}</Button>
           </HStack>
         </Box>
       )}
@@ -341,3 +357,4 @@ const styles = StyleSheet.create({
 });
 
 export default AmbulanceScreen;
+
