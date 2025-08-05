@@ -65,10 +65,11 @@ const HomeComponent = () => {
       </View>
       <View style={styles.row}>
   <Box onPress={() => navigation.navigate('Ambulance')} iconName="ambulance" text="Ambulance" />
-  <Box onPress={onActionSheetOpen} iconName="translate" text="Language" />
+      <Box onPress={() => navigation.navigate('Traffic')} iconName="police-badge" text="Traffic" />
 </View>
       <View style={styles.row}>
         {/* <Box onPress={onActionSheetOpen} iconName="translate" text="Language" /> */}
+          <Box onPress={onActionSheetOpen} iconName="translate" text="Language" />
         <Box onPress={() => {logout()}} iconName="power" text="Log Out" />
       </View>
      </ScrollView>

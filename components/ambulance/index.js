@@ -42,8 +42,8 @@ const AmbulanceScreen = () => {
   const [routeCoords, setRouteCoords] = useState([]);
   const [tripStatus, setTripStatus] = useState('');
   const [tripId, setTripId] = useState('');
-
-  console.log(tripId, 'Trip ID');
+  const [riderLocation, setRiderLocation] = useState(null);
+  const [currentRouteStage, setCurrentRouteStage] = useState('toPickup');
 
   useEffect(() => {
     const socket = io('https://api.quickline.tech', {
@@ -83,7 +83,7 @@ const AmbulanceScreen = () => {
           });
 
           const res = await axios.get(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyD4eggCjR87W_jzEavBrCIBAe-BAL1z_Rc`
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=AIzaSyCITjhP3x18ppVz8M7ld-mgaFv8LhE2McU`
           );
           const address = res.data.results[0]?.formatted_address;
           setFromText(address);
@@ -109,8 +109,15 @@ const AmbulanceScreen = () => {
       });
       const riders = res.data.data;
       setNearbyRiders(riders);
-      if (riders.length) setSelectedRider(riders[0]);
-      else Alert.alert('No Riders', 'No nearby ambulance drivers found.');
+      if (riders.length) {
+        setSelectedRider(riders[0]);
+        setRiderLocation({
+          latitude: riders[0].location.coordinates[1],
+          longitude: riders[0].location.coordinates[0],
+        });
+      } else {
+        Alert.alert('No Riders', 'No nearby ambulance drivers found.');
+      }
     } catch {
       Alert.alert('Error', 'Could not load riders');
     }
@@ -137,11 +144,49 @@ const AmbulanceScreen = () => {
       const { trip } = res.data;
       setTripId(trip._id);
       Alert.alert('🚑 Trip requested successfully');
-      fetchRoute();
+      fetchRoute('toPickup');
     } catch (err) {
       console.error(err);
       Alert.alert('❌ Request Failed', 'Trip request could not be processed.');
     }
+  };
+
+  const fetchRoute = async (stage = 'toPickup') => {
+    try {
+      let origin, destination;
+      const apiKey = 'AIzaSyCITjhP3x18ppVz8M7ld-mgaFv8LhE2McU';
+
+      if (stage === 'toPickup') {
+        origin = `${selectedRider.location.coordinates[1]},${selectedRider.location.coordinates[0]}`;
+        destination = `${fromLocation.latitude},${fromLocation.longitude}`;
+      } else {
+        origin = `${fromLocation.latitude},${fromLocation.longitude}`;
+        destination = `${toLocation.latitude},${toLocation.longitude}`;
+      }
+
+      const res = await axios.get(
+        `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${apiKey}`
+      );
+      const points = decodePolyline(res.data.routes[0].overview_polyline.points);
+      setRouteCoords(points);
+      setCurrentRouteStage(stage);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const decodePolyline = (t) => {
+    let points = [], index = 0, lat = 0, lng = 0;
+    while (index < t.length) {
+      let b, shift = 0, result = 0;
+      do { b = t.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      lat += (result & 1 ? ~(result >> 1) : result >> 1);
+      shift = result = 0;
+      do { b = t.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
+      lng += (result & 1 ? ~(result >> 1) : result >> 1);
+      points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
+    }
+    return points;
   };
 
   const onConfirm = async () => {
@@ -162,26 +207,29 @@ const AmbulanceScreen = () => {
 
     socketRef.current.emit('joinTrip', tripId);
 
-    const socket = socketRef.current;
-
     const handleTripStatusUpdate = ({ status }) => {
       console.log('🛰️ Trip status update:', status);
       setTripStatus(status);
-      if (status === 'en_route' || status === 'arrived') fetchRoute();
-      if (status === 'completed') Alert.alert('Trip Completed');
+
+      if (status === 'en_route') {
+        fetchRoute('toPickup');
+      } else if (status === 'arrived') {
+        fetchRoute('toDropoff');
+      } else if (status === 'completed') {
+        Alert.alert('Trip Completed');
+        setRouteCoords([]);
+      }
     };
 
     const handleLocationUpdate = ({ userModel, coords }) => {
       if (userModel === 'AmbulanceRider') {
-        mapRef.current?.animateToRegion({
-          latitude: coords.latitude,
-          longitude: coords.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        });
+        const loc = { latitude: coords.latitude, longitude: coords.longitude };
+        setRiderLocation(loc);
+        mapRef.current?.animateToRegion({ ...loc, latitudeDelta: 0.01, longitudeDelta: 0.01 });
       }
     };
 
+    const socket = socketRef.current;
     socket.on('tripStatusUpdate', handleTripStatusUpdate);
     socket.on('locationUpdate', handleLocationUpdate);
 
@@ -191,44 +239,8 @@ const AmbulanceScreen = () => {
     };
   }, [tripId]);
 
-  const fetchRoute = async () => {
-    try {
-      const origin = `${selectedRider.location.coordinates[1]},${selectedRider.location.coordinates[0]}`;
-      const destination = `${fromLocation.latitude},${fromLocation.longitude}`;
-      const apiKey = 'AIzaSyD4eggCjR87W_jzEavBrCIBAe-BAL1z_Rc';
-
-      const res = await axios.get(
-        `https://maps.googleapis.com/maps/api/directions/json?origin=${origin}&destination=${destination}&key=${apiKey}`
-      );
-      const points = decodePolyline(res.data.routes[0].overview_polyline.points);
-      setRouteCoords(points);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const decodePolyline = (t) => {
-    let points = [], index = 0, lat = 0, lng = 0;
-    while (index < t.length) {
-      let b, shift = 0, result = 0;
-      do { b = t.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-      lat += (result & 1 ? ~(result >> 1) : result >> 1);
-      shift = result = 0;
-      do { b = t.charCodeAt(index++) - 63; result |= (b & 0x1f) << shift; shift += 5; } while (b >= 0x20);
-      lng += (result & 1 ? ~(result >> 1) : result >> 1);
-      points.push({ latitude: lat / 1e5, longitude: lng / 1e5 });
-    }
-    return points;
-  };
-
-  const distanceInMeters = selectedRider && fromLocation
-    ? getDistance(
-        { latitude: fromLocation.latitude, longitude: fromLocation.longitude },
-        {
-          latitude: selectedRider.location.coordinates[1],
-          longitude: selectedRider.location.coordinates[0],
-        }
-      )
+  const distanceInMeters = riderLocation && fromLocation
+    ? getDistance(fromLocation, riderLocation)
     : null;
 
   const estimateArrivalTime = (distance) => Math.ceil((distance / 11.11) / 60);
@@ -243,15 +255,8 @@ const AmbulanceScreen = () => {
       >
         {fromLocation && <Marker coordinate={fromLocation} title="You" pinColor="red" />}
         {toLocation && <Marker coordinate={toLocation} title="Destination" pinColor="purple" />}
-        {selectedRider && (
-          <Marker
-            coordinate={{
-              latitude: selectedRider.location.coordinates[1],
-              longitude: selectedRider.location.coordinates[0],
-            }}
-            title="Ambulance"
-            pinColor="blue"
-          />
+        {riderLocation && (
+          <Marker coordinate={riderLocation} title="Ambulance" pinColor="blue" />
         )}
         {routeCoords.length > 0 && (
           <Polyline coordinates={routeCoords} strokeColor="#1e90ff" strokeWidth={4} />
@@ -274,7 +279,7 @@ const AmbulanceScreen = () => {
               setFromText(data.description);
             }}
             fetchDetails
-            query={{ key: 'AIzaSyD4eggCjR87W_jzEavBrCIBAe-BAL1z_Rc', language: 'en' }}
+            query={{ key: 'AIzaSyCITjhP3x18ppVz8M7ld-mgaFv8LhE2McU', language: 'en' }}
             styles={inputStyle}
           />
           <GooglePlacesAutocomplete
@@ -287,7 +292,7 @@ const AmbulanceScreen = () => {
               setConfirmed(false); setRouteCoords([]);
             }}
             fetchDetails
-            query={{ key: 'AIzaSyD4eggCjR87W_jzEavBrCIBAe-BAL1z_Rc', language: 'en' }}
+            query={{ key: 'AIzaSyCITjhP3x18ppVz8M7ld-mgaFv8LhE2McU', language: 'en' }}
             styles={inputStyle}
           />
         </ScrollView>
@@ -301,11 +306,11 @@ const AmbulanceScreen = () => {
 
       {confirmed && (
         <Box position="absolute" bottom={130} left={10} right={10} bg="white" p={4} borderRadius="md" shadow={2}>
-          <Text style={{ color: 'black' }}>{t("Status")}: {t('tripStatus') || t('Waiting for rider')}</Text>
+          <Text style={{ color: 'black' }}>{t("Status")}: {t(`${tripStatus}`) || t('Waiting for rider')}</Text>
         </Box>
       )}
 
-      {selectedRider && fromLocation && (
+      {riderLocation && fromLocation && (
         <Box position="absolute" bottom={0} left={0} right={0} bg="white" p={4} borderTopRadius="2xl" shadow={6}>
           <HStack alignItems="center" space={4}>
             <Avatar bg="blue.600">
@@ -313,14 +318,16 @@ const AmbulanceScreen = () => {
             </Avatar>
             <VStack flex={1}>
               <Text style={{ fontWeight: 'bold', fontSize: 16, color: 'black' }}>
-                {selectedRider.name || 'Ambulance Driver'}
+                {selectedRider?.name || 'Ambulance Driver'}
               </Text>
               <Text style={{ color: 'gray' }}>ETA: {estimateArrivalTime(distanceInMeters)} min</Text>
               <Text style={{ color: 'gray' }}>
                 {t("Distance")}: {(distanceInMeters / 1000).toFixed(2)} km
               </Text>
             </VStack>
-            <Button size="sm" onPress={() => Linking.openURL(`tel:${trip?.rider?.telephone_number}`)}>{t("Call")}</Button>
+            <Button size="sm" onPress={() => Linking.openURL(`tel:${selectedRider?.telephone_number}`)}>
+              {t("Call")}
+            </Button>
           </HStack>
         </Box>
       )}
@@ -357,4 +364,3 @@ const styles = StyleSheet.create({
 });
 
 export default AmbulanceScreen;
-

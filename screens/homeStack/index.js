@@ -13,6 +13,7 @@ import Calenderscreen from '../../components/appointment';
 import Timeslots from '../../components/timeslots';
 import HomeComponent from '../../components/Homecomponent/HomeComponent';
 import AmbulanceScreen from '../../components/ambulance';
+import TrafficPoliceListScreen from '../../components/traffic';
 
 
 const Stack = createNativeStackNavigator();
@@ -164,6 +165,17 @@ function HomeStack() {
       <Stack.Screen
         name="Ambulance"
         component={AmbulanceScreen}
+        options={({navigation}) => ({
+          title: null,
+          // headerLeft: () => <Materialicon name="x" size={30} color="black" />,
+          // headerRight: () => (
+          //   <Materialicon name="help-circle" size={30} color="black" />
+          // ),
+        })}
+      />
+         <Stack.Screen
+        name="Traffic"
+        component={TrafficPoliceListScreen}
         options={({navigation}) => ({
           title: null,
           // headerLeft: () => <Materialicon name="x" size={30} color="black" />,
