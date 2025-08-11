@@ -18,7 +18,7 @@ import { Context as AuthContext } from '../../context/AppContext';
 import Geolocation from 'react-native-geolocation-service';
 
 const API_URL = 'https://api.quickline.tech/traffic-officers';
-const PAYMENT_API = 'https://api.quickline.tech/traffic-payments';
+const PAYMENT_API = 'http://api.quickline.tech/traffic-payments';
 
 export default function TrafficPoliceListScreen() {
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ export default function TrafficPoliceListScreen() {
     setLoading(true);
     setLocationError(null);
     try {
-      const url = `${API_URL}/nearby?lat=${lat}&lng=${lng}&radius=5000`;
+      const url = `${API_URL}/nearby?lat=${lat}&lng=${lng}&radius=2000`;
       const res = await fetch(url, {
         headers: { 'auth-token': state?.user?.auth_token }
       });
@@ -60,7 +60,9 @@ export default function TrafficPoliceListScreen() {
         headers: { 'auth-token': state?.user?.auth_token }
       });
       const json = await res.json();
-      const ids = json.data.map(p => p.officer_id._id); // assuming populated
+
+      // MAP OFFICER IDS (convert to string for safe comparison)
+      const ids = json.data.map(p => p.officer_id._id.toString());
       setPaidOfficerIds(ids);
     } catch (err) {
       console.error('Fetch paid officers error:', err);
@@ -102,7 +104,22 @@ export default function TrafficPoliceListScreen() {
   };
 
   const handlePhonePress = (id) => {
-    if (paidOfficerIds.includes(id)) return;
+    // convert to string for safe compare
+    const isPaid = paidOfficerIds.includes(id.toString());
+
+    if (selectedTab === 'completed' && isPaid) {
+      // Already paid and in "Completed" tab — just reveal number
+      setSelectedOfficerId(id);
+      return;
+    }
+
+    if (isPaid) {
+      // In 'Nearby Officers' tab but already paid — reveal number
+      setSelectedOfficerId(id);
+      return;
+    }
+
+    // Otherwise initiate payment
     initializePayment(id);
   };
 
@@ -118,7 +135,6 @@ export default function TrafficPoliceListScreen() {
 
   const getUserLocation = async () => {
     try {
-      // Request permissions for Android
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
@@ -137,7 +153,6 @@ export default function TrafficPoliceListScreen() {
         }
       }
 
-      // Get current position
       Geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
@@ -169,13 +184,24 @@ export default function TrafficPoliceListScreen() {
     </HStack>
   );
 
+  const isWithinTimeWindow = () => {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    const after18 = hours > 18 || (hours === 18 && minutes >= 0);
+    const before0730 = hours < 7 || (hours === 7 && minutes <= 30);
+    return after18 || before0730;
+  };
+
   const filteredOfficers =
-    selectedTab === 'paid'
-      ? officers.filter(o => paidOfficerIds.includes(o._id))
+    selectedTab === 'completed'
+      ? officers.filter(o => paidOfficerIds.includes(o._id.toString()))
       : officers;
 
   const renderItem = ({ item }) => {
-    const isPaid = paidOfficerIds.includes(item._id);
+    const isPaid = paidOfficerIds.includes(item._id.toString());
+    const showStationPhone = isWithinTimeWindow();
+    const shouldShowPhone = selectedOfficerId === item._id && isPaid;
 
     return (
       <Box
@@ -209,8 +235,10 @@ export default function TrafficPoliceListScreen() {
           </VStack>
           <TouchableOpacity onPress={() => handlePhonePress(item._id)} style={styles.iconButton}>
             <Icon name="phone" size={24} color="#007AFF" />
-            {isPaid && (
-              <Text style={styles.phoneText}>{item.phone}</Text>
+            {shouldShowPhone && (
+              <Text style={styles.phoneText}>
+                {showStationPhone ? item.station_phone : item.phone}
+              </Text>
             )}
           </TouchableOpacity>
         </HStack>
@@ -218,15 +246,13 @@ export default function TrafficPoliceListScreen() {
     );
   };
 
-  // Fetch officers and paid officers on first load
   useEffect(() => {
     getUserLocation();
     fetchPaidOfficers();
   }, []);
 
-  // Refresh based on tab switch
   useEffect(() => {
-    if (selectedTab === 'paid') {
+    if (selectedTab === 'completed') {
       fetchPaidOfficers();
     } else {
       getUserLocation();
@@ -235,27 +261,25 @@ export default function TrafficPoliceListScreen() {
 
   return (
     <Box flex={1} bg="coolGray.100" pt={6} px={4}>
-      {/* Tabs */}
       <HStack space={4} mb={4} justifyContent="center">
         <TouchableOpacity
           onPress={() => setSelectedTab('all')}
           style={[styles.tab, selectedTab === 'all' && styles.activeTab]}
         >
           <Text style={[styles.tabText, selectedTab === 'all' && styles.activeTabText]}>
-            Nearby Officers
+            {t("Nearby Officers")}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setSelectedTab('paid')}
-          style={[styles.tab, selectedTab === 'paid' && styles.activeTab]}
+          onPress={() => setSelectedTab('completed')}
+          style={[styles.tab, selectedTab === 'completed' && styles.activeTab]}
         >
-          <Text style={[styles.tabText, selectedTab === 'paid' && styles.activeTabText]}>
-            Paid Officers
+          <Text style={[styles.tabText, selectedTab === 'completed' && styles.activeTabText]}>
+            {t("Paid Officers")}
           </Text>
         </TouchableOpacity>
       </HStack>
 
-      {/* Officer List */}
       {loading ? (
         <Center flex={1}>
           <Spinner color="primary.500" size="lg" />
@@ -266,11 +290,7 @@ export default function TrafficPoliceListScreen() {
       ) : locationError ? (
         <Center flex={1}>
           <Text color="red.500">{locationError}</Text>
-          <Button
-            mt={4}
-            colorScheme="primary"
-            onPress={getUserLocation}
-          >
+          <Button mt={4} colorScheme="primary" onPress={getUserLocation}>
             Retry
           </Button>
         </Center>
@@ -288,7 +308,6 @@ export default function TrafficPoliceListScreen() {
         />
       )}
 
-      {/* Payment Modal */}
       <Modal isOpen={isOpen} onClose={onClose}>
         <Modal.Content maxWidth="400px">
           <Modal.CloseButton />

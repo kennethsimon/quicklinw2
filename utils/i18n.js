@@ -344,10 +344,14 @@ const resources = {
       "To access the phone number, please pay using one of the following services": "To access the phone number, please pay using one of the following services",
       "Pay to View Phone Number": "Pay to View Phone Number",
       "Traffic": "Traffic",
+      "Nearby Officers": "Nearby Officers",
+      "Paid Officers": "Paid Officers",
     },
   },
   sw: {
     translation: {
+      "Paid Officers": "Maafisa Waliolipwa",
+      "Nearby Officers": "Maafisa Walioko Karibu",
       "Traffic": "Usalama wa Barabarani",
       "Pay to View Phone Number": "Lipa ili kuona nambari ya simu",
       "To access the phone number, please pay using one of the following services": "Ili kupata nambari ya simu, tafadhali lipa kwa kutumia mojawapo ya huduma zifuatazo",
